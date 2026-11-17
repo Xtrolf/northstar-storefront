@@ -104,7 +104,7 @@ main{overflow:hidden}.container{max-width:1440px;margin:auto;padding-left:5.2%;p
 </footer>
 <div class="drawer-backdrop" id="drawer-backdrop"></div>
 <aside class="drawer" id="cart-drawer" aria-label="Shopping bag" aria-hidden="true"><div class="drawer-head"><h3>Your bag <span id="drawer-count">(0)</span></h3><button class="close-btn" data-close-drawer aria-label="Close bag">×</button></div><div class="drawer-body" id="cart-items"></div><div class="drawer-foot" id="cart-footer"></div></aside>
-<aside class="drawer" id="wishlist-drawer" aria-label="Wishlist" aria-hidden="true"><div class="drawer-head"><h3>Your saved edit</h3><button class="close-btn" data-close-drawer aria-label="Close wishlist">×</button></div><div class="drawer-body" id="wishlist-items"></div><div class="drawer-foot"><p>Your wishlist is saved on this device. Account sync will be available when Northstar's backend is connected.</p></div></aside>
+<aside class="drawer" id="wishlist-drawer" aria-label="Wishlist" aria-hidden="true"><div class="drawer-head"><h3>Your saved edit</h3><button class="close-btn" data-close-drawer aria-label="Close wishlist">×</button></div><div class="drawer-body" id="wishlist-items"></div><div class="drawer-foot"><p>Your wishlist is saved on this device. Sign-in and cross-device account sync are still being built.</p></div></aside>
 <div class="modal-backdrop" id="modal-backdrop"></div>
 <section class="modal" id="quick-modal" role="dialog" aria-modal="true" aria-label="Product details"><button class="modal-close" data-close-modal aria-label="Close">×</button><div id="quick-content"></div></section>
 <section class="modal" id="compare-modal" role="dialog" aria-modal="true" aria-label="Compare products"><button class="modal-close" data-close-modal aria-label="Close">×</button><div id="compare-content" style="padding:34px"></div></section>
@@ -114,7 +114,7 @@ main{overflow:hidden}.container{max-width:1440px;margin:auto;padding-left:5.2%;p
 <script>
 (function(){
 "use strict";
-const products=[
+let products=[
 {id:1,name:"Orbit Studio Headphones",brand:"Aural / Tech",category:"Tech",price:6490,old:7990,rating:4.9,reviews:128,badge:"Bestseller",tag:"Immersive sound",image:"https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=900&q=82",description:"A considered audio essential. Sculptural form, immersive sound and a fit made for long listening sessions.",featured:1},
 {id:2,name:"Form 02 Everyday Tote",brand:"Forma / Style",category:"Style",price:2890,old:3490,rating:4.8,reviews:86,badge:"New drop",tag:"Carry your day",image:"https://images.unsplash.com/photo-1548036328-c9fa89d128fa?auto=format&fit=crop&w=900&q=82",description:"A clean-lined everyday carryall with room for the things that move with you.",featured:2},
 {id:3,name:"Studio Objects Watch",brand:"Aster / Style",category:"Style",price:5290,old:null,rating:4.7,reviews:64,badge:"The icon",tag:"Time, redefined",image:"https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=900&q=82",description:"Minimal hardware and a quiet silhouette. An everyday piece that does not need to shout.",featured:3},
@@ -137,7 +137,7 @@ let cart=load("northstar_cart_v2",{}),wishlist=load("northstar_wishlist_v2",[]),
 function toast(msg){$("toast").textContent=msg;$("toast").classList.add("show");clearTimeout(toastTimer);toastTimer=setTimeout(()=>$("toast").classList.remove("show"),2300)}
 function cartQty(){return Object.values(cart).reduce((n,x)=>n+Number(x),0)}
 function updateCounts(){$("cart-count").textContent=cartQty();$("wish-count").textContent=wishlist.length;$("drawer-count").textContent="("+cartQty()+")";$("compare-label").textContent=compare.length+" SELECTED";$("compare-bar").classList.toggle("show",compare.length>0)}
-function getProduct(id){return products.find(p=>p.id===Number(id))}
+function getProduct(id){return products.find(p=>String(p.id)===String(id))}
 function imageMarkup(p,alt){return '<img src="'+safe(p.image)+'" alt="'+safe(alt||p.name)+'" loading="lazy" onerror="this.style.opacity=0;this.parentElement.style.background=\'#d9d6cb\'">'}
 function renderProducts(){
  const q=$("search-input")?.value.toLowerCase().trim()||"";
@@ -160,8 +160,42 @@ function renderProducts(){
   meta.innerHTML='<div class="product-brand">'+safe(p.brand)+'</div><div class="product-name">'+safe(p.name)+'</div><div class="product-bottom"><div class="product-price">'+money(p.price)+(p.old?'<span class="old-price">'+money(p.old)+'</span>':'')+'</div><button class="add-inline" data-add="'+p.id+'">ADD +</button></div><div class="rating"><span>★</span> '+p.rating.toFixed(1)+' / 5 &nbsp;·&nbsp; '+p.reviews+' NOTES</div>';
   card.append(visual,meta);grid.append(card);
  });
- grid.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>addToCart(Number(b.dataset.add)));
- grid.querySelectorAll("[data-quick]").forEach(el=>el.onclick=e=>{if(e.target.closest("button"))return;openQuick(Number(el.dataset.quick))});
+ grid.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>addToCart(b.dataset.add));
+ grid.querySelectorAll("[data-quick]").forEach(el=>el.onclick=e=>{if(e.target.closest("button"))return;openQuick(el.dataset.quick)});
+}
+async function loadLiveCatalog(){
+ try{
+  const apiUrl="https://ixeagnjfrrgmpijqumgi.supabase.co";
+  const publicKey="sb_publishable_OTGNyjW127w9dPUMfAyUsA_iVk68X98";
+  const response=await fetch(apiUrl+"/rest/v1/products?select=id,slug,name,brand,description,price_paise,compare_at_price_paise,image_url,badge,tagline,rating,review_count,sort_order,categories(name)&is_published=eq.true&order=sort_order.asc",{
+   headers:{apikey:publicKey,Authorization:"Bearer "+publicKey}
+  });
+  if(!response.ok)throw new Error("Catalogue API returned "+response.status);
+  const rows=await response.json();
+  if(!Array.isArray(rows)||!rows.length)throw new Error("No published catalogue items returned");
+  const oldIdMap=new Map();
+  products=rows.map(p=>{
+   oldIdMap.set(String(p.sort_order),p.id);
+   return {
+    id:p.id,name:p.name,brand:p.brand+" / "+(p.categories?.name||"Northstar"),
+    category:p.categories?.name||"All",price:p.price_paise/100,
+    old:p.compare_at_price_paise==null?null:p.compare_at_price_paise/100,
+    rating:Number(p.rating||0),reviews:Number(p.review_count||0),
+    badge:p.badge||"Curated",tag:p.tagline||"",image:p.image_url,
+    description:p.description||"",featured:p.sort_order
+   };
+  });
+  const migrateMap=id=>oldIdMap.get(String(id))||id;
+  cart=Object.fromEntries(Object.entries(cart).map(([id,qty])=>[migrateMap(id),qty]).filter(([id])=>products.some(p=>String(p.id)===String(id))));
+  wishlist=wishlist.map(migrateMap).filter(id=>products.some(p=>String(p.id)===String(id)));
+  recent=recent.map(migrateMap).filter(id=>products.some(p=>String(p.id)===String(id)));
+  persist();renderProducts();renderCart();renderWishlist();updateCounts();
+  document.documentElement.dataset.catalog="connected";
+ }catch(error){
+  console.error("Northstar live catalogue:",error);
+  document.documentElement.dataset.catalog="fallback";
+  toast("Live catalogue unavailable. Showing the saved demo catalogue.");
+ }
 }
 function renderFilters(){document.querySelectorAll(".filter-pill[data-filter]").forEach(b=>b.classList.toggle("active",b.dataset.filter===activeFilter))}
 function addToCart(id){cart[id]=(Number(cart[id])||0)+1;persist();updateCounts();renderCart();toast(getProduct(id).name+" added to your bag")}
@@ -176,7 +210,7 @@ function renderCart(){
  foot.innerHTML='<div class="subtotal"><span>SUBTOTAL</span><strong>'+money(total)+'</strong></div><p>Shipping and taxes are calculated at checkout. This portfolio demo does not process payments or create real orders.</p><button class="btn-primary" id="demo-checkout">CONTINUE TO DEMO CHECKOUT <span>↗</span></button>';
  $("demo-checkout").onclick=()=>toast("Demo only — connect a secure payment provider before accepting orders.");
 }
-function renderWishlist(){const host=$("wishlist-items");host.replaceChildren();const items=wishlist.map(getProduct).filter(Boolean);if(!items.length){host.innerHTML='<div class="empty-cart"><div style="font-size:30px">♡</div><strong>Your edit starts here.</strong><p>Save pieces you love and find them here later.</p><button class="filter-pill" id="wish-shop">EXPLORE THE EDIT ↗</button></div>';$("wish-shop").onclick=closeDrawers;return}items.forEach(p=>{const row=document.createElement("div");row.className="cart-row";row.innerHTML='<div class="cart-thumb">'+imageMarkup(p)+'</div><div class="cart-info"><small>'+safe(p.brand)+'</small><strong>'+safe(p.name)+'</strong><small>'+money(p.price)+'</small><button class="remove-item" data-wish-remove="'+p.id+'">REMOVE FROM SAVED</button></div><div class="cart-row-price"><button class="filter-pill" data-wish-add="'+p.id+'">ADD +</button></div>';host.append(row)});host.querySelectorAll("[data-wish-remove]").forEach(b=>b.onclick=()=>toggleWish(Number(b.dataset.wishRemove)));host.querySelectorAll("[data-wish-add]").forEach(b=>b.onclick=()=>addToCart(Number(b.dataset.wishAdd)))}
+function renderWishlist(){const host=$("wishlist-items");host.replaceChildren();const items=wishlist.map(getProduct).filter(Boolean);if(!items.length){host.innerHTML='<div class="empty-cart"><div style="font-size:30px">♡</div><strong>Your edit starts here.</strong><p>Save pieces you love and find them here later.</p><button class="filter-pill" id="wish-shop">EXPLORE THE EDIT ↗</button></div>';$("wish-shop").onclick=closeDrawers;return}items.forEach(p=>{const row=document.createElement("div");row.className="cart-row";row.innerHTML='<div class="cart-thumb">'+imageMarkup(p)+'</div><div class="cart-info"><small>'+safe(p.brand)+'</small><strong>'+safe(p.name)+'</strong><small>'+money(p.price)+'</small><button class="remove-item" data-wish-remove="'+p.id+'">REMOVE FROM SAVED</button></div><div class="cart-row-price"><button class="filter-pill" data-wish-add="'+p.id+'">ADD +</button></div>';host.append(row)});host.querySelectorAll("[data-wish-remove]").forEach(b=>b.onclick=()=>toggleWish(b.dataset.wishRemove));host.querySelectorAll("[data-wish-add]").forEach(b=>b.onclick=()=>addToCart(b.dataset.wishAdd))}
 function openDrawer(which){closeDrawers();const drawer=$(which+"-drawer");$("drawer-backdrop").classList.add("open");drawer.classList.add("open");drawer.setAttribute("aria-hidden","false");document.body.style.overflow="hidden";if(which==="cart")renderCart();else renderWishlist()}
 function closeDrawers(){$("drawer-backdrop").classList.remove("open");document.querySelectorAll(".drawer").forEach(d=>{d.classList.remove("open");d.setAttribute("aria-hidden","true")});document.body.style.overflow=""}
 function openQuick(id){const p=getProduct(id);if(!p)return;recent=[id,...recent.filter(x=>x!==id)].slice(0,6);persist();$("quick-content").innerHTML='<div class="quick-modal-grid"><div class="quick-modal-image">'+imageMarkup(p)+'</div><div class="quick-modal-copy"><div class="product-brand">'+safe(p.brand)+'</div><h3>'+safe(p.name)+'</h3><div class="rating"><span>★</span> '+p.rating.toFixed(1)+' / 5 &nbsp;·&nbsp; '+p.reviews+' NOTES</div><div class="price-line">'+money(p.price)+(p.old?'<span class="old-price">'+money(p.old)+'</span>':'')+'</div><p>'+safe(p.description)+'</p><div class="modal-tags"><span>'+safe(p.category)+'</span><span>'+safe(p.tag)+'</span><span>CURATED PICK</span></div><button class="btn-primary" id="quick-add">ADD TO BAG <span>↗</span></button><button class="add-inline" id="quick-save" style="margin-top:17px">♡ SAVE TO YOUR EDIT</button></div></div>';
@@ -189,9 +223,10 @@ $("filters").addEventListener("click",e=>{const b=e.target.closest("[data-filter
 $("sort").addEventListener("change",renderProducts);
 $("search-focus").onclick=()=>{const field=$("search-input");if(field){field.focus();$("shop").scrollIntoView({behavior:"smooth"})}else{const wrap=document.createElement("div");wrap.id="search-input-wrap";wrap.style.cssText="position:fixed;z-index:100;top:85px;left:50%;transform:translateX(-50%);width:min(520px,calc(100% - 28px));background:#f2f0e9;padding:12px;box-shadow:0 10px 40px #0008";wrap.innerHTML='<input id="search-input" type="search" placeholder="Search the edit..." style="width:100%;padding:14px;border:1px solid #ccc;background:white;color:#111"><div style="font:9px monospace;color:#777;margin:8px 2px">TYPE TO FILTER THE EDIT · PRESS ESC TO CLOSE</div>';document.body.append(wrap);const f=$("search-input");f.addEventListener("input",renderProducts);f.focus();f.addEventListener("keydown",e=>{if(e.key==="Escape"){wrap.remove();renderProducts()}})}};
 $("cart-open").onclick=()=>openDrawer("cart");$("wishlist-open").onclick=()=>openDrawer("wishlist");$("dock-bag").onclick=()=>openDrawer("cart");$("dock-saved").onclick=()=>openDrawer("wishlist");$("drawer-backdrop").onclick=closeDrawers;document.querySelectorAll("[data-close-drawer]").forEach(b=>b.onclick=closeDrawers);$("modal-backdrop").onclick=closeModal;document.querySelectorAll("[data-close-modal]").forEach(b=>b.onclick=closeModal);
-$("compare-open").onclick=openCompare;$("compare-clear").onclick=()=>{compare=[];updateCounts();renderProducts()};$("newsletter-form").onsubmit=e=>{e.preventDefault();const email=$("newsletter-email").value.trim();if(!email)return;let subs=load("northstar_local_subscribers",[]);if(!subs.includes(email)){subs.push(email);try{localStorage.setItem("northstar_local_subscribers",JSON.stringify(subs))}catch(err){}}$("newsletter-email").value="";toast("You're on the local demo list. Backend signup is not connected yet.")};
+$("compare-open").onclick=openCompare;$("compare-clear").onclick=()=>{compare=[];updateCounts();renderProducts()};$("newsletter-form").onsubmit=e=>{e.preventDefault();const email=$("newsletter-email").value.trim();if(!email)return;let subs=load("northstar_local_subscribers",[]);if(!subs.includes(email)){subs.push(email);try{localStorage.setItem("northstar_local_subscribers",JSON.stringify(subs))}catch(err){}}$("newsletter-email").value="";toast("This demo newsletter stores your signup only on this device; email delivery is not connected.")};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeDrawers();closeModal();$("search-input-wrap")?.remove()}if((e.key==="/"||((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k"))&&!["INPUT","TEXTAREA"].includes(document.activeElement.tagName)){e.preventDefault();$("search-focus").click()}});
 renderProducts();renderCart();renderWishlist();updateCounts();
+loadLiveCatalog();
 })();
 </script>
 </body>
