@@ -3,7 +3,7 @@
 A responsive storefront interface built with semantic HTML, CSS and vanilla JavaScript.
 
 ## Live demo
-https://aditya-northstar-standalone.vercel.app
+https://aditya-northstar-storefront.vercel.app
 
 ## Features
 - Search products by name or category
