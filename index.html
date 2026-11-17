@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Northstar is a responsive product catalogue UI demo built with HTML, CSS and JavaScript.">
+  <title>Northstar | Product Catalogue</title>
+  <style>
+    :root {
+      font-family: Arial, Helvetica, sans-serif;
+      color: #1c2922;
+      background: #f7f8f6;
+      --green: #155b42;
+      --line: #e1e7e2;
+      --muted: #69776e;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    .wrap { max-width: 1100px; margin: auto; padding: 25px 20px 45px; }
+    nav { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); padding: 7px 0 19px; }
+    .logo { font-size: 24px; font-weight: 850; letter-spacing: -1px; }
+    .logo span { color: var(--green); }
+    .cart { background: #155b42; color: #fff; border-radius: 30px; padding: 9px 15px; font-size: 13px; font-weight: 700; }
+    .hero { padding: 45px 0 22px; }
+    .eyebrow { font-size: 11px; font-weight: 800; letter-spacing: 1.7px; color: var(--green); text-transform: uppercase; }
+    .hero h1 { font-size: clamp(34px, 6vw, 56px); line-height: 1.02; letter-spacing: -2px; margin: 10px 0; }
+    .hero p { color: var(--muted); max-width: 620px; line-height: 1.55; }
+    .controls { display: grid; grid-template-columns: 1fr 180px 190px; gap: 10px; margin: 21px 0; }
+    input, select { font: inherit; padding: 12px; border: 1px solid var(--line); border-radius: 9px; background: white; min-width: 0; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+    .visual { height: 150px; display: grid; place-items: center; background: linear-gradient(135deg, #e8efe9, #f4eee4); font-size: 50px; }
+    .details { padding: 15px; }
+    .category { font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; color: #718077; }
+    .name { font-weight: 750; margin: 5px 0; }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 13px; }
+    .price { font-weight: 800; }
+    .add { border: 0; border-radius: 8px; padding: 9px 12px; background: var(--green); color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .add:hover { filter: brightness(1.08); }
+    .empty { grid-column: 1 / -1; text-align: center; color: #708077; padding: 40px; }
+    .note { color: #839087; font-size: 12px; line-height: 1.5; margin-top: 25px; }
+    @media (max-width: 740px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .controls { grid-template-columns: 1fr 1fr; }
+      .controls input { grid-column: 1 / -1; }
+    }
+    @media (max-width: 460px) {
+      .wrap { padding: 18px 14px 35px; }
+      .grid { grid-template-columns: 1fr; }
+      .visual { height: 130px; }
+      .hero { padding-top: 34px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <nav>
+      <div class="logo">northstar<span>.</span></div>
+      <div class="cart" aria-live="polite">Cart <span id="cart-count">0</span></div>
+    </nav>
+
+    <section class="hero">
+      <div class="eyebrow">Everyday essentials</div>
+      <h1>Good things.<br>Thoughtfully chosen.</h1>
+      <p>A sample storefront interface demonstrating product discovery, sorting and a simple cart interaction.</p>
+    </section>
+
+    <section class="controls" aria-label="Product controls">
+      <input id="search" type="search" placeholder="Search products..." aria-label="Search products">
+      <select id="category" aria-label="Filter by category">
+        <option value="all">All categories</option>
+        <option value="Workspace">Workspace</option>
+        <option value="Audio">Audio</option>
+        <option value="Accessories">Accessories</option>
+      </select>
+      <select id="sort" aria-label="Sort products">
+        <option value="featured">Featured</option>
+        <option value="low">Price: low to high</option>
+        <option value="high">Price: high to low</option>
+      </select>
+    </section>
+
+    <section class="grid" id="products" aria-live="polite"></section>
+
+    <p class="note">Portfolio demo only. Product names and prices are sample data. There is no checkout, payment gateway, account system or backend.</p>
+  </main>
+
+  <script>
+    const products = [
+      { id: 1, name: "Desk organiser", category: "Workspace", price: 499, icon: "▤" },
+      { id: 2, name: "Wireless headphones", category: "Audio", price: 1899, icon: "◖" },
+      { id: 3, name: "Ceramic desk mug", category: "Workspace", price: 349, icon: "◡" },
+      { id: 4, name: "USB-C hub", category: "Accessories", price: 999, icon: "⌘" },
+      { id: 5, name: "Bluetooth speaker", category: "Audio", price: 1499, icon: "◉" },
+      { id: 6, name: "Notebook set", category: "Accessories", price: 299, icon: "▧" }
+    ];
+
+    let cart = [];
+    const byId = (id) => document.getElementById(id);
+
+    function formatPrice(value) {
+      return "₹" + value.toLocaleString("en-IN");
+    }
+
+    function renderProducts() {
+      const searchTerms = byId("search").value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+      let visibleProducts = products.filter((product) => {
+        const searchableText = (product.name + " " + product.category).toLowerCase();
+        const matchesSearch = searchTerms.every((term) => searchableText.includes(term));
+        const matchesCategory = byId("category").value === "all" ||
+          product.category === byId("category").value;
+        return matchesSearch && matchesCategory;
+      });
+
+      if (byId("sort").value === "low") {
+        visibleProducts = [...visibleProducts].sort((a, b) => a.price - b.price);
+      } else if (byId("sort").value === "high") {
+        visibleProducts = [...visibleProducts].sort((a, b) => b.price - a.price);
+      }
+
+      const grid = byId("products");
+      grid.replaceChildren();
+
+      if (visibleProducts.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = "No products match your search.";
+        grid.append(empty);
+        return;
+      }
+
+      visibleProducts.forEach((product) => {
+        const card = document.createElement("article");
+        card.className = "card";
+
+        const visual = document.createElement("div");
+        visual.className = "visual";
+        visual.textContent = product.icon;
+
+        const details = document.createElement("div");
+        details.className = "details";
+
+        const category = document.createElement("div");
+        category.className = "category";
+        category.textContent = product.category;
+
+        const name = document.createElement("div");
+        name.className = "name";
+        name.textContent = product.name;
+
+        const row = document.createElement("div");
+        row.className = "row";
+
+        const price = document.createElement("span");
+        price.className = "price";
+        price.textContent = formatPrice(product.price);
+
+        const addButton = document.createElement("button");
+        addButton.type = "button";
+        addButton.className = "add";
+        addButton.textContent = "Add to cart";
+        addButton.addEventListener("click", () => {
+          cart.push(product);
+          byId("cart-count").textContent = String(cart.length);
+        });
+
+        row.append(price, addButton);
+        details.append(category, name, row);
+        card.append(visual, details);
+        grid.append(card);
+      });
+    }
+
+    ["search", "category", "sort"].forEach((id) => {
+      byId(id).addEventListener(id === "search" ? "input" : "change", renderProducts);
+    });
+
+    renderProducts();
+  </script>
+</body>
+</html>
